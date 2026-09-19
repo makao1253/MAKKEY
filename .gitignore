@@ -1,0 +1,23 @@
+# --- Python ---
+__pycache__/
+*.py[cod]
+.mypy_cache/
+.venv/
+venv/
+
+# --- budowanie (build_exe.py) ---
+# Exe publikuje się jako wydanie (Releases) na GitHubie, nie w repozytorium.
+build/
+dist/
+# Ikonę rysuje build_exe.py z app.theme.make_icon.
+assets/makkey.ico
+
+# --- konfiguracja użytkownika - każdy komputer ma własną ---
+config.json
+
+# --- pliki tymczasowe aktualizacji exe (app/updater.py) ---
+*.exe.new
+*.exe.old
+
+# --- pusty klon repozytorium założony wewnątrz projektu ---
+/MAKKEY/

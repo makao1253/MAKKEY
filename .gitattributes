@@ -1,0 +1,3 @@
+# Pliki .bat zawsze z końcami linii CRLF - cmd.exe potrafi źle czytać
+# skrypty z samym LF (np. po klonie z core.autocrlf=false).
+*.bat text eol=crlf

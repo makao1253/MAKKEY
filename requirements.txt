@@ -1,0 +1,12 @@
+# --- interfejs ---
+PySide6>=6.6
+
+# Komunikacja z urządzeniem (odczyt raportów IN przez Raw Input, wysyłka
+# raportów OUT przez WriteFile) idzie na czystym ctypes z biblioteki
+# standardowej - hidapi nie jest potrzebne.
+
+# Wysyłanie skrótów do systemu też idzie przez ctypes (SendInput).
+
+# --- będzie potrzebne w kolejnych etapach ---
+# wykrywanie aktywnego procesu (automatyczny dobór profilu) i autostart:
+# pywin32>=306

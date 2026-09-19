@@ -1,0 +1,1 @@
+"""Warstwa GUI (PySide6)."""
