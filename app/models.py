@@ -25,11 +25,16 @@ class ButtonMapping:
     wywołuje niczego, ale zachowuje akcję i kolor - po ponownym włączeniu
     wszystko wraca bez przepisywania ustawień. Stan jest indywidualny dla
     każdego profilu.
+
+    `comment` to notatka użytkownika - do czego ten skrót służy w programie
+    danego profilu. Tylko do podglądu: nie wpływa na akcję i nie trafia do
+    urządzenia.
     """
     action_type: str = ACTION_NONE
     value: str = ""
     color: str = DEFAULT_LED_COLOR
     enabled: bool = True
+    comment: str = ""
 
     def describe(self) -> str:
         """Jednolinijkowy opis akcji - do legend i podglądów."""
@@ -40,6 +45,10 @@ class ButtonMapping:
         if self.action_type == ACTION_MEDIA:
             return tr(self.value)      # zapisana nazwa akcji jest po polsku
         return self.value
+
+    def note(self) -> str:
+        """Komentarz bez zbędnych spacji ("" = brak komentarza)."""
+        return self.comment.strip()
 
 
 def _default_buttons() -> dict[int, ButtonMapping]:
@@ -57,7 +66,6 @@ class Profile:
     is_default: bool = False
     enabled: bool = True
     in_manual_cycle: bool = False
-    oled_text: str = ""
     buttons: dict[int, ButtonMapping] = field(default_factory=_default_buttons)
 
     def button(self, index: int) -> ButtonMapping:
@@ -132,15 +140,24 @@ class AppModel:
         return {i: self.current_profile.buttons[i].enabled
                 for i in range(1, TOTAL_BUTTON_COUNT + 1)}
 
+    def button_tooltip(self, index: int) -> str:
+        """Dymek nad klawiszem macropada: akcja + komentarz użytkownika."""
+        mapping = self.mapping(index)
+        text = tr("Przycisk {n}: {action}", n=index, action=mapping.describe())
+        if not mapping.enabled:
+            text = tr("{action}  [wyłączony]", action=text)
+        note = mapping.note()
+        return f"{text}\n{note}" if note else text
+
 
 def _example_profiles() -> list[Profile]:
     """Dane przykładowe, żeby szkielet dało się obejrzeć i klikać."""
     fusion = Profile(name="Fusion 360", exe="Fusion360.exe, Fusion.exe",
-                     is_default=True, in_manual_cycle=True, oled_text="FUSION 360")
+                     is_default=True, in_manual_cycle=True)
     kicad = Profile(name="KiCad", exe="kicad.exe, pcbnew.exe, eeschema.exe",
-                    in_manual_cycle=True, oled_text="KICAD")
-    blender = Profile(name="Blender", exe="blender.exe", oled_text="BLENDER")
-    general = Profile(name="Ogólny", exe="", in_manual_cycle=True, oled_text="OGOLNY")
+                    in_manual_cycle=True)
+    blender = Profile(name="Blender", exe="blender.exe")
+    general = Profile(name="Ogólny", exe="", in_manual_cycle=True)
 
     from .constants import ACTION_SHORTCUT
     demo = {1: ("Ctrl+Z", "#2F80ED"), 2: ("Ctrl+Y", "#2F80ED"),

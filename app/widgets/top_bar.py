@@ -36,8 +36,8 @@ zielona = działa, czerwona = wyłączony.</p>
 skróty w różnych programach (np. Fusion 360 vs KiCad). Profil można
 zmienić ręcznie przyciskiem 13 albo automatycznie - MAKKEY sam wykryje
 uruchomiony program po nazwie pliku .exe.</p>
-<p><b>Kolory LED</b> (WS2812B) i <b>tekst na wyświetlaczu</b> wysyłane są
-do urządzenia raportem wyjściowym przy aktywacji profilu.</p>
+<p><b>Kolory LED</b> (WS2812B) i <b>nazwa profilu na wyświetlaczu</b>
+wysyłane są do urządzenia raportem wyjściowym przy aktywacji profilu.</p>
 """,
     "en": """\
 <h3>How does MAKKEY work?</h3>
@@ -59,8 +59,8 @@ green = active, red = disabled.</p>
 different programs (e.g. Fusion 360 vs KiCad). The profile can be
 switched manually with button 13 or automatically - MAKKEY detects the
 running program by its .exe file name.</p>
-<p><b>LED colors</b> (WS2812B) and the <b>display text</b> are sent to
-the device in an output report when a profile is activated.</p>
+<p><b>LED colors</b> (WS2812B) and the <b>profile name on the display</b>
+are sent to the device in an output report when a profile is activated.</p>
 """,
 }
 

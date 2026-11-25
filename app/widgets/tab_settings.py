@@ -1,18 +1,23 @@
 """Zakładka "Ustawienia" - wariant urządzenia, wygląd, skrót awaryjny, plik
-konfiguracyjny.
+konfiguracyjny (eksport / import / ustawienia fabryczne + lokalizacja).
 
 Wariant urządzenia (podświetlenie / wyświetlacz) jest ustawieniem globalnym,
 a nie właściwością profilu: opisuje sprzęt, który stoi na biurku. Wyłączenie
 którejkolwiek opcji chowa w całym programie sekcje, które bez tego sprzętu
 i tak niczego by nie zrobiły.
+
+Zakładka zna tylko ustawienia globalne, a nie profile - eksport, import
+i ustawienia fabryczne wybierają tu jedynie plik, a robotę (z potwierdzeniem)
+wykonuje MainWindow.
 """
 from __future__ import annotations
 
 import os
+from datetime import date
 from pathlib import Path
 
-from PySide6.QtCore import QRectF, Qt, QUrl, Signal
-from PySide6.QtGui import QColor, QDesktopServices, QIcon, QPainter, QPixmap
+from PySide6.QtCore import QRectF, QStandardPaths, Qt, Signal
+from PySide6.QtGui import QColor, QIcon, QPainter, QPixmap
 from PySide6.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLineEdit, QCheckBox,
     QPushButton, QFileDialog, QMessageBox, QScrollArea,
@@ -20,11 +25,8 @@ from PySide6.QtWidgets import (
 
 from .. import theme as T
 from ..config import AppConfig, get_config_path
-from ..constants import (
-    APP_VERSION, DEFAULT_CONFIG_PATH, OLED_WIDTH_PX, OLED_HEIGHT_PX, UPDATE_REPO_URL,
-)
+from ..constants import DEFAULT_CONFIG_PATH, OLED_WIDTH_PX, OLED_HEIGHT_PX
 from ..i18n import LANGUAGES, tr
-from ..updater import MODE_GIT, MODE_RELEASE
 from .common import Card, HotkeyEdit, SliderRow, combo, hint, label_row, row
 
 
@@ -48,13 +50,13 @@ class TabSettings(QWidget):
     accentChanged = Signal(str)         # kolor wiodący
     brightnessChanged = Signal(int)
     languageChanged = Signal(str)       # kod języka - okno buduje się od nowa
-    updateCheckRequested = Signal()
-    updateInstallRequested = Signal()
+    exportRequested = Signal(str)       # plik, do którego wyeksportować konfigurację
+    importRequested = Signal(str)       # plik, z którego ją zaimportować
+    factoryResetRequested = Signal()
 
-    def __init__(self, cfg: AppConfig, update_mode: str, parent=None):
+    def __init__(self, cfg: AppConfig, parent=None):
         super().__init__(parent)
         self.cfg = cfg
-        self._update_mode = update_mode
         self._loading = True
 
         outer = QVBoxLayout(self)
@@ -71,7 +73,6 @@ class TabSettings(QWidget):
 
         lay.addWidget(self._build_hardware_card())
         lay.addWidget(self._build_app_card())
-        lay.addWidget(self._build_update_card())
         lay.addWidget(self._build_panic_card())
         lay.addWidget(self._build_config_card())
         lay.addStretch(1)
@@ -85,8 +86,8 @@ class TabSettings(QWidget):
 
         self.leds_checkbox = QCheckBox(tr("Klawiatura z podświetleniem LED (WS2812B)"))
         self.leds_checkbox.setToolTip(tr(
-            "Wyłączone: znika wybór koloru diod, a podgląd rysuje klawisze\n"
-            "bez poświaty. Kolory zapisane w profilach zostają nietknięte."
+            "Wyłączone: diody w urządzeniu gasną, znika wybór koloru, a podgląd\n"
+            "rysuje klawisze bez poświaty. Kolory zapisane w profilach zostają nietknięte."
         ))
         self.leds_checkbox.toggled.connect(self._on_leds)
         card.add(self.leds_checkbox)
@@ -100,8 +101,9 @@ class TabSettings(QWidget):
             w=OLED_WIDTH_PX, h=OLED_HEIGHT_PX,
         ))
         self.oled_checkbox.setToolTip(tr(
-            "Wyłączone: znika sekcja wyświetlacza w zakładce \"Przyciski\",\n"
-            "a podgląd rysuje urządzenie bez ekranu."
+            "Włączone: wyświetlacz pokazuje nazwę aktywnego profilu.\n"
+            "Wyłączone: ekran urządzenia jest czyszczony, znika sekcja wyświetlacza\n"
+            "w zakładce \"Przyciski\", a podgląd rysuje urządzenie bez ekranu."
         ))
         self.oled_checkbox.toggled.connect(self._on_oled)
         card.add(self.oled_checkbox)
@@ -148,41 +150,6 @@ class TabSettings(QWidget):
         )))
         return card
 
-    def _build_update_card(self) -> QWidget:
-        card = Card(tr("Aktualizacje"))
-
-        if self._update_mode == MODE_GIT:
-            source = tr("kod z repozytorium git - aktualizacja przez git pull")
-        elif self._update_mode == MODE_RELEASE:
-            source = tr("plik exe - aktualizacja z wydań (Releases) na GitHubie")
-        else:
-            source = tr("katalog programu nie jest repozytorium git - "
-                        "aktualizacja z poziomu programu jest niedostępna")
-        card.add(hint(tr("Wersja {version}, źródło: {source}", version=APP_VERSION, source=source)))
-
-        self.check_updates_checkbox = QCheckBox(tr("Sprawdzaj aktualizacje przy starcie"))
-        self.check_updates_checkbox.toggled.connect(self._on_check_updates)
-        card.add(self.check_updates_checkbox)
-
-        self.update_check_btn = QPushButton(tr("Sprawdź teraz"))
-        self.update_check_btn.clicked.connect(self.updateCheckRequested)
-        self.update_install_btn = QPushButton(tr("Aktualizuj"))
-        self.update_install_btn.setObjectName("Primary")
-        self.update_install_btn.setEnabled(False)
-        self.update_install_btn.clicked.connect(self.updateInstallRequested)
-        repo_btn = QPushButton(tr("Otwórz repozytorium"))
-        repo_btn.clicked.connect(lambda: QDesktopServices.openUrl(QUrl(UPDATE_REPO_URL)))
-        card.add_layout(row(self.update_check_btn, self.update_install_btn, repo_btn))
-
-        self.update_status = hint("")
-        self.update_status.setTextInteractionFlags(Qt.TextSelectableByMouse)
-        card.add(self.update_status)
-
-        available = self._update_mode in (MODE_GIT, MODE_RELEASE)
-        self.check_updates_checkbox.setEnabled(available)
-        self.update_check_btn.setEnabled(available)
-        return card
-
     def _build_panic_card(self) -> QWidget:
         card = Card(tr("Skrót awaryjny"))
         card.add(hint(tr(
@@ -205,6 +172,23 @@ class TabSettings(QWidget):
 
     def _build_config_card(self) -> QWidget:
         card = Card(tr("Plik konfiguracyjny"))
+
+        export_btn = QPushButton(tr("Eksportuj..."))
+        export_btn.clicked.connect(self._export_config)
+        import_btn = QPushButton(tr("Importuj..."))
+        import_btn.clicked.connect(self._import_config)
+        reset_btn = QPushButton(tr("Ustawienia fabryczne..."))
+        reset_btn.setObjectName("Danger")
+        reset_btn.clicked.connect(self.factoryResetRequested)
+        card.add_layout(row(export_btn, import_btn, reset_btn))
+
+        card.add(hint(tr(
+            "Eksport zapisuje kopię całej konfiguracji (ustawienia, profile, "
+            "przypisania przycisków i kolory) w wybranym pliku. Import i ustawienia "
+            "fabryczne zastępują bieżącą konfigurację - jej lokalizacja (poniżej) "
+            "się nie zmienia."
+        )))
+
         self.config_path_edit = QLineEdit(str(get_config_path()))
         self.config_path_edit.setReadOnly(True)
         self.config_path_edit.setObjectName("Mono")
@@ -238,27 +222,13 @@ class TabSettings(QWidget):
         self.autostart_checkbox.setChecked(self.cfg.autostart)
         self.minimize_checkbox.setChecked(self.cfg.minimize_to_tray)
         self._sync_minimize_hint(self.cfg.minimize_to_tray)
-        self.check_updates_checkbox.setChecked(self.cfg.check_updates)
         self.panic_enabled_checkbox.setChecked(self.cfg.panic_hotkey_enabled)
         self.panic_hotkey_edit.setText(self.cfg.panic_hotkey)
         self.panic_hotkey_edit.setEnabled(self.cfg.panic_hotkey_enabled)
         self.config_path_edit.setText(str(get_config_path()))
         self._loading = False
 
-    def set_update_status(self, text: str, can_install: bool = False, busy: bool = False):
-        """Wynik sprawdzania / postęp aktualizacji (steruje nim MainWindow)."""
-        self.update_status.setText(text)
-        self.update_install_btn.setEnabled(can_install and not busy)
-        self.update_check_btn.setEnabled(
-            not busy and self._update_mode in (MODE_GIT, MODE_RELEASE)
-        )
-
     # ------------------------------------------------------------- zdarzenia
-    def _on_check_updates(self, checked: bool):
-        if not self._loading:
-            self.cfg.check_updates = checked
-            self.settingsChanged.emit()
-
     def _on_language(self, _index: int):
         if self._loading:
             return
@@ -327,6 +297,32 @@ class TabSettings(QWidget):
         if not self._loading:
             self.cfg.panic_hotkey = value
             self.settingsChanged.emit()
+
+    @staticmethod
+    def _backup_dir() -> Path:
+        """Folder, od którego zaczynają okna eksportu i importu - Dokumenty,
+        a nie %APPDATA%, żeby kopię łatwo było znaleźć i przenieść."""
+        docs = QStandardPaths.writableLocation(QStandardPaths.StandardLocation.DocumentsLocation)
+        return Path(docs) if docs else Path.home()
+
+    def _export_config(self):
+        suggested = self._backup_dir() / f"MAKKEY-config-{date.today().isoformat()}.json"
+        path, _ = QFileDialog.getSaveFileName(
+            self, tr("Eksportuj konfigurację"), str(suggested), tr("Plik JSON (*.json)")
+        )
+        if not path:
+            return
+        if not path.lower().endswith(".json"):
+            path += ".json"
+        self.exportRequested.emit(path)
+
+    def _import_config(self):
+        path, _ = QFileDialog.getOpenFileName(
+            self, tr("Importuj konfigurację"), str(self._backup_dir()),
+            tr("Plik JSON (*.json)")
+        )
+        if path:
+            self.importRequested.emit(path)
 
     def _choose_config_path(self):
         path, _ = QFileDialog.getSaveFileName(

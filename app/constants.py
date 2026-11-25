@@ -3,7 +3,7 @@ from pathlib import Path
 import os
 
 APP_NAME = "MAKKEY"
-APP_VERSION = "1.1.0"
+APP_VERSION = "1.1.2"
 APP_WINDOW_TITLE = f"{APP_NAME} {APP_VERSION}"
 
 # --- geometria urządzenia -------------------------------------------------
@@ -23,10 +23,12 @@ TOTAL_BUTTON_COUNT = GRID_BUTTON_COUNT + 1  # 13
 MAX_MANUAL_PROFILES = 4
 
 # --- OLED 0.91" (SSD1306, 128x32 px, I2C) ---------------------------------
+# Firmware rysuje nazwę aktywnego profilu fontem 11x18: jedna linia,
+# 128 / 11 = 11 znaków - dłuższa nazwa jest ucinana.
 OLED_WIDTH_PX = 128
 OLED_HEIGHT_PX = 32
-OLED_MAX_CHARS = 16      # przy foncie 8x16 -> 16 znaków w linii
-OLED_MAX_LINES = 2
+OLED_MAX_CHARS = 11
+OLED_MAX_LINES = 1
 
 # --- USB / HID -------------------------------------------------------------
 # Urządzenie zgłasza się własnym, surowym deskryptorem (vendor-defined usage
@@ -113,9 +115,3 @@ LED_PRESET_COLORS = [
     "#9B51E0", "#00BCD4", "#FF7A00", "#FFFFFF",
 ]
 DEFAULT_LED_COLOR = "#2F80ED"
-
-# --- źródła tekstu na wyświetlaczu ----------------------------------------
-OLED_SOURCE_PROFILE = "Nazwa aktywnego profilu"
-OLED_SOURCE_BUTTON = "Ostatnio wciśnięty przycisk"
-OLED_SOURCE_CUSTOM = "Tekst własny profilu"
-OLED_SOURCES = [OLED_SOURCE_CUSTOM, OLED_SOURCE_PROFILE, OLED_SOURCE_BUTTON]

@@ -1,4 +1,4 @@
-# MAKKEY 1.1.0
+# MAKKEY 1.1.2
 
 Aplikacja na Windows do konfiguracji macropada MAKKEY (13 przycisków,
 diody WS2812B, wyświetlacz OLED 0.91", MCU STM32G431KBT6).
@@ -52,6 +52,7 @@ app/
     tab_device.py           wykrywanie urządzenia wśród urządzeń HID
     tab_monitor.py          podgląd zdarzeń z urządzenia
     tab_settings.py         wariant sprzętu, wygląd, skrót awaryjny, config
+                            (eksport / import / fabryczne, lokalizacja)
     toggle_switch.py        przełącznik rysowany ręcznie
     color_picker.py         własny wybór koloru diody LED
 ```
@@ -72,10 +73,12 @@ własną konfigurację (patrz `.gitignore`).
 pyta o opis, robi commit i push. Zmiany z innego komputera najpierw
 dociąga (`pull --rebase`), więc push nie zostanie odrzucony.
 
-**Aktualizacja programu** - Ustawienia -> Aktualizacje ("Sprawdź teraz",
-"Aktualizuj"); domyślnie MAKKEY sprawdza też repozytorium kilka sekund po
-starcie i o nowej wersji informuje dymkiem w zasobniku. Sposób zależy od
-tego, jak program jest uruchomiony:
+**Aktualizacja programu** - logika jest w `app/updater.py`, ale program
+**nie ma teraz widoku aktualizacji** (sekcji w Ustawieniach, dymków, okien)
+i sam ich nie sprawdza. Metody w `MainWindow` są gotowe do podpięcia pod
+nowy widok: `_check_updates()` -> `_install_update()` -> `_restart_app()`,
+a stan wypisują w pasku stanu. Sposób aktualizacji zależy od tego, jak
+program jest uruchomiony:
 
 | Uruchomienie | Skąd nowa wersja | Jak |
 |---|---|---|
@@ -106,8 +109,8 @@ Polski lub angielski - wybór w Ustawieniach -> Aplikacja -> Język. Zmiana
 działa od razu: okno zapisuje stan i buduje się od nowa w tym samym procesie.
 
 Teksty przechodzą przez `tr("polski oryginał", pole=...)` z `app/i18n.py`,
-a tłumaczenia leżą w `app/lang_en.py` (klucz = polski tekst). Typy akcji,
-akcje multimedialne i źródła tekstu OLED zapisują się w `config.json` zawsze
+a tłumaczenia leżą w `app/lang_en.py` (klucz = polski tekst). Typy akcji
+i akcje multimedialne zapisują się w `config.json` zawsze
 po polsku i są tłumaczone dopiero przy wyświetlaniu - konfiguracja działa
 tak samo w obu językach. Nowy tekst w interfejsie = `tr(...)` w kodzie
 i wpis w `lang_en.py`; brak wpisu oznacza po prostu polski tekst.
@@ -119,6 +122,24 @@ w Ustawieniach - nowa lokalizacja zapamiętywana jest we wskaźniku
 `%APPDATA%\MAKKEY\location.json`, a bieżąca konfiguracja jest od razu
 zapisywana w nowym miejscu. Zapis jest opóźniony o ~0,7 s od ostatniej
 zmiany, żeby nie pisać na dysk przy każdym wciśniętym znaku.
+
+Nad ścieżką, w tej samej karcie Ustawień, są trzy przyciski:
+
+* **Eksportuj...** - kopia całej konfiguracji (ustawienia, profile,
+  przypisania, kolory) w wybranym pliku; domyślnie
+  `Dokumenty\MAKKEY-config-RRRR-MM-DD.json`. Plik ma ten sam format co
+  `config.json` (plus pole `app_version` z wersją programu, który go zapisał),
+  więc oba są wymienne.
+* **Importuj...** - wczytuje taki plik. Najpierw jest w całości sprawdzany
+  (zły JSON albo plik bez sekcji `settings` / `profiles` = komunikat, nic się
+  nie zmienia), potem program pyta o potwierdzenie.
+* **Ustawienia fabryczne...** - po potwierdzeniu wszystko wraca do wartości
+  domyślnych: ustawienia (także język i wariant urządzenia), profile
+  przykładowe, przypisania i kolory.
+
+Import i ustawienia fabryczne nadpisują bieżący plik konfiguracyjny - jego
+lokalizacja się nie zmienia - a okno buduje się od nowa, tak jak po zmianie
+języka. Cofnąć się tego nie da, więc przed nimi warto zrobić eksport.
 
 Pliki z wersji 1 wczytują się bez zmian: motyw z pola `dark_theme` jest
 przepisywany na `theme`, a nieznane wtedy pola (predefiniowanie przycisku,
@@ -165,13 +186,16 @@ Raport OUT (`ID 0x02`, 1 + 63 bajty) - host → urządzenie:
 
 | Kod | Nazwa | Parametry |
 |---|---|---|
-| `0x10` | SET_LED_ONE | `[nr 1-13, R, G, B]` |
-| `0x11` | SET_LED_ALL | `13 x (R, G, B)` |
+| `0x10` | SET_LED_ONE | `[nr przycisku 1-13, R, G, B]` |
+| `0x11` | SET_LED_ALL | `13 x (R, G, B)` dla przycisków 1-13 |
 | `0x12` | SAVE_TO_FLASH | - |
 | `0x13` | SET_BRIGHTNESS | `[0-255]` |
-| `0x20` | OLED_TEXT | `[linia, długość, ASCII...]` |
+| `0x20` | OLED_TEXT | `[linia 0, długość, ASCII...]` |
 | `0x21` | OLED_CLEAR | - |
 | `0x30` | PING | - (odpowiedź: raport IN typu `0x02`) |
+
+Diody adresowane są numerem przycisku - na kolejność w łańcuchu na płytce
+(13, 1-4, 8-5, 9-12) przelicza je firmware.
 
 Pełna specyfikacja firmware: `firmware/PROMPT.md`.
 
@@ -224,6 +248,16 @@ w lewym górnym rogu klawisza: **zielona** = działa, **czerwona** = wyłączony
 
 Cały profil włącza się i wyłącza kwadracikiem przy jego nazwie na liście.
 
+## Komentarze do przycisków
+
+Pole "Komentarz" w zakładce Przyciski to własna notatka: do czego dany
+skrót służy w programie profilu (np. `Ctrl+E` - "Wyciągnięcie" w Fusion 360).
+Komentarz jest osobny dla każdego przycisku w każdym profilu, zapisuje się
+w `config.json` (pole `comment` przycisku) i jest widoczny w dymku po
+najechaniu na klawisz podglądu, pod opisem zaznaczonego / wciśniętego
+przycisku i w strumieniu zdarzeń Monitora. Nie wpływa na akcję i nie trafia
+do urządzenia.
+
 ## Wykonywanie akcji
 
 Po wciśnięciu przycisku na urządzeniu MAKKEY wykonuje jego akcję przez
@@ -245,16 +279,22 @@ Windows nie zgłasza wtedy błędu, skrót po prostu nie dociera.
 ## Wariant sprzętowy
 
 W Ustawieniach wybiera się, czy klawiatura ma podświetlenie LED i czy ma
-wyświetlacz. Wyłączenie którejkolwiek opcji **chowa** powiązane sekcje
+wyświetlacz. Zaznaczona opcja oznacza, że urządzenie dostaje kolory diod
+i nazwę profilu. Wyłączenie którejkolwiek opcji **gasi** ten sprzęt
+w urządzeniu (diody czarne / ekran wyczyszczony), **chowa** powiązane sekcje
 w całym programie (wybór koloru, sekcja OLED) i przestawia podgląd: bez
 diod klawisze rysowane są bez poświaty, bez wyświetlacza - bez ekranu.
-Kolory i teksty zapisane w profilach zostają nietknięte.
+Ponowne zaznaczenie od razu wysyła bieżący profil. Kolory zapisane
+w profilach zostają nietknięte.
 
 ### OLED 0.91"
 
-Wyświetlacz to SSD1306 128x32 px na I2C; przy foncie 8x16 mieszczą się
-2 linie po 16 znaków. Tekst należy do profilu i ustawia się go w zakładce
-Przyciski. Standardowy font nie ma polskich znaków, więc ogonki są
+Wyświetlacz to SSD1306 128x32 px na I2C i pokazuje **zawsze nazwę aktywnego
+profilu** - zmienia się razem z profilem (ręcznie, przyciskiem 13 albo
+automatycznie po programie) i od razu po zmianie nazwy. Firmware rysuje ją
+fontem 11x18, wyśrodkowaną: mieści się jedna linia po 11 znaków, dłuższa
+nazwa jest ucinana. Standardowy font nie ma polskich znaków, więc ogonki są
 transliterowane (ą→a, ł→l) po stronie aplikacji - dokładnie tak samo, jak
 robi to firmware, żeby podgląd pokazywał to, co naprawdę pojawi się na
-ekranie.
+ekranie. Przycisk "Wyślij na OLED" w zakładce Przyciski wysyła nazwę
+ponownie.

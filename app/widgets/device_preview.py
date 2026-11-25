@@ -31,6 +31,7 @@ class DevicePreviewPanel(QWidget):
         card = Card(tr("Podgląd na żywo"))
 
         self.macropad = MacropadWidget()
+        self.macropad.set_tooltip_provider(self.model.button_tooltip)
         self.macropad.buttonSelected.connect(self.buttonSelected)
         card.add(self.macropad)
 
@@ -70,7 +71,7 @@ class DevicePreviewPanel(QWidget):
         """Przeładowuje kolory, stany i opisy z bieżącego profilu."""
         self.macropad.set_colors(self.model.colors())
         self.macropad.set_enabled_flags(self.model.enabled_flags())
-        self.macropad.set_oled_text(self.model.current_profile.oled_text)
+        self.macropad.set_oled_text(self.model.current_profile.name)
         self.macropad.set_selected(self.model.selected_button)
         self._refresh_selected_info()
 
@@ -120,6 +121,9 @@ class DevicePreviewPanel(QWidget):
             self.pressed_action.setText(tr(
                 "{action}  (predefiniowanie wyłączone)", action=self.pressed_action.text()
             ))
+        note = mapping.note()
+        if note:
+            self.pressed_action.setText(f"{self.pressed_action.text()}\n{note}")
 
         self._pressed_index = index
         if hold_ms > 0:
@@ -162,4 +166,7 @@ class DevicePreviewPanel(QWidget):
         text = tr("Zaznaczony: przycisk {n} - {action}", n=index, action=desc)
         if not mapping.enabled:
             text = tr("{action}  [wyłączony]", action=text)
+        note = mapping.note()
+        if note:
+            text = f"{text}\n{note}"
         self.selected_info.setText(text)

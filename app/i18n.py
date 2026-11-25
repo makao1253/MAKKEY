@@ -5,7 +5,7 @@ a brak tłumaczenia kończy się polskim tekstem, a nie pustym polem. Wartości
 wstawia się po nazwie: tr("Przycisk {n}", n=3).
 
 Część polskich napisów to zarazem wartości zapisywane w config.json (typy
-akcji, akcje multimedialne, źródła tekstu OLED). W pliku zostają po polsku -
+akcji, akcje multimedialne). W pliku zostają po polsku -
 tłumaczy się je dopiero przy wyświetlaniu: tr(mapping.action_type). Dzięki
 temu konfiguracja działa tak samo w każdym języku.
 

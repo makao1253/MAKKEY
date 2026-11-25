@@ -286,10 +286,14 @@ _ASCII_MAP = str.maketrans({
 
 
 def to_oled_ascii(text: str) -> str:
-    """Tekst przycięty do jednej linii wyświetlacza, bez ogonków."""
+    """Tekst przycięty do jednej linii wyświetlacza, bez ogonków.
+
+    Spacje na brzegach (także te odsłonięte przez ucięcie) są usuwane, bo
+    firmware środkuje tekst - spacja na końcu przesunęłaby go w lewo.
+    """
     clean = (text or "").translate(_ASCII_MAP)
     clean = "".join(ch if 32 <= ord(ch) < 127 else "?" for ch in clean)
-    return clean[:OLED_MAX_CHARS]
+    return clean.strip()[:OLED_MAX_CHARS].rstrip()
 
 
 # --- łącze ----------------------------------------------------------------

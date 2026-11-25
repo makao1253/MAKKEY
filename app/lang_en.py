@@ -7,7 +7,7 @@ klamrowych - takie same po obu stronach.
 from __future__ import annotations
 
 EN: dict[str, str] = {
-    # --- typy akcji, media, źródła OLED (wartości zapisywane w config.json) ---
+    # --- typy akcji i media (wartości zapisywane w config.json) ---
     "Brak akcji": "No action",
     "Skrót klawiszowy": "Keyboard shortcut",
     "Wpisz tekst": "Type text",
@@ -20,9 +20,6 @@ EN: dict[str, str] = {
     "Ciszej": "Volume down",
     "Wycisz": "Mute",
     "Blokada ekranu": "Lock screen",
-    "Tekst własny profilu": "Profile's custom text",
-    "Nazwa aktywnego profilu": "Active profile name",
-    "Ostatnio wciśnięty przycisk": "Last pressed button",
 
     # --- kolory wiodące ---
     "Niebieski": "Blue",
@@ -49,6 +46,8 @@ EN: dict[str, str] = {
     "Nie znaleziono {path} - użyto ustawień domyślnych.":
         "{path} not found - using default settings.",
     "Nie udało się wczytać {path}: {error}": "Could not load {path}: {error}",
+    "Plik {path} nie jest konfiguracją MAKKEY.": "{path} is not a MAKKEY configuration file.",
+    "Plik {path} ma nieprawidłową zawartość: {error}": "{path} has invalid content: {error}",
     "Wczytano konfigurację z {path}": "Configuration loaded from {path}",
     "Nie udało się zarejestrować odbioru z urządzenia (Raw Input).":
         "Could not register for device input (Raw Input).",
@@ -89,6 +88,27 @@ EN: dict[str, str] = {
     "Zapisano konfigurację ({name})": "Configuration saved ({name})",
     "Działa dalej w tle. Kliknij ikonę w zasobniku, żeby wrócić.":
         "Still running in the background. Click the tray icon to return.",
+    "Nie udało się wyeksportować konfiguracji:\n{error}":
+        "Could not export the configuration:\n{error}",
+    "Wyeksportowano konfigurację do {path}": "Configuration exported to {path}",
+    "Zaimportować konfigurację z pliku {name}?\n\n"
+    "Bieżące ustawienia, profile, przypisania przycisków i kolory zostaną "
+    "zastąpione zawartością pliku.":
+        "Import the configuration from {name}?\n\n"
+        "The current settings, profiles, button assignments and colors will be "
+        "replaced with the contents of the file.",
+    "Zaimportowano konfigurację z {path}": "Configuration imported from {path}",
+    "Przywrócić ustawienia fabryczne?\n\n"
+    "Wszystkie ustawienia (także język i wariant urządzenia), profile, "
+    "przypisania przycisków i kolory wrócą do wartości domyślnych. "
+    "Tego nie da się cofnąć - jeśli chcesz zachować obecną "
+    "konfigurację, najpierw ją wyeksportuj.":
+        "Restore factory settings?\n\n"
+        "All settings (including the language and hardware variant), profiles, "
+        "button assignments and colors will return to their defaults. "
+        "This cannot be undone - if you want to keep the current "
+        "configuration, export it first.",
+    "Przywrócono ustawienia fabryczne.": "Factory settings restored.",
 
     # --- wykonywanie akcji / łącze HID ---
     "pusty skrót": "empty shortcut",
@@ -178,6 +198,15 @@ EN: dict[str, str] = {
     "Tekst": "Text",
     "Akcja": "Action",
     "Tekst do wpisania...": "Text to type...",
+    "Komentarz": "Comment",
+    "Do czego służy ten skrót w tym programie...":
+        "What this shortcut does in this program...",
+    "Twoja notatka do tego przycisku. Zapisywana osobno w każdym\n"
+    "profilu, pokazywana w podglądzie i w dymku nad klawiszem.\n"
+    "Nie jest wysyłana do urządzenia.":
+        "Your note for this button. Saved separately in each\n"
+        "profile, shown in the preview and in the key's tooltip.\n"
+        "It is not sent to the device.",
     "Ręczne przełączanie": "Manual switching",
     "Profile dodaje się do cyklu w panelu po lewej (maksymalnie {max}).":
         "Profiles are added to the cycle in the panel on the left (up to {max}).",
@@ -199,14 +228,15 @@ EN: dict[str, str] = {
         "The color is saved with the profile and sent to the device when the "
         "profile is activated. Changes show up in the preview immediately.",
     'Wyświetlacz OLED 0.91" ({w}x{h})': 'OLED display 0.91" ({w}x{h})',
-    "Pokazuj": "Show",
-    "maksymalnie {n} znaków": "up to {n} characters",
+    "Na ekranie": "On screen",
     "Wyślij na OLED": "Send to OLED",
-    "Tekst należy do aktywnego profilu. Kontroler SSD1306 nie ma polskich znaków "
-    "w standardowym foncie - ogonki zostaną zamienione na odpowiedniki bez "
-    "znaków diakrytycznych (ą→a, ł→l).":
-        "The text belongs to the active profile. The SSD1306 controller's standard "
-        "font has no Polish characters - diacritics are replaced with their plain "
+    "Wyświetlacz pokazuje nazwę aktywnego profilu fontem 11x18 - mieści się {n} "
+    "znaków, dłuższa nazwa zostanie ucięta. Standardowy font SSD1306 nie ma "
+    "polskich znaków - ogonki zostaną zamienione na odpowiedniki bez znaków "
+    "diakrytycznych (ą→a, ł→l).":
+        "The display shows the active profile name in an 11x18 font - {n} "
+        "characters fit, a longer name is cut off. The standard SSD1306 font has "
+        "no Polish characters - diacritics are replaced with their plain "
         "equivalents (ą→a, ł→l).",
 
     # --- zakładka Urządzenie ---
@@ -264,16 +294,18 @@ EN: dict[str, str] = {
     # --- zakładka Ustawienia ---
     "Wariant urządzenia": "Hardware variant",
     "Klawiatura z podświetleniem LED (WS2812B)": "Keypad with LED backlight (WS2812B)",
-    "Wyłączone: znika wybór koloru diod, a podgląd rysuje klawisze\n"
-    "bez poświaty. Kolory zapisane w profilach zostają nietknięte.":
-        "Off: the LED color picker is hidden and the preview draws keys\n"
-        "without glow. Colors saved in profiles stay untouched.",
+    "Wyłączone: diody w urządzeniu gasną, znika wybór koloru, a podgląd\n"
+    "rysuje klawisze bez poświaty. Kolory zapisane w profilach zostają nietknięte.":
+        "Off: the device LEDs turn off, the color picker is hidden and the preview\n"
+        "draws keys without glow. Colors saved in profiles stay untouched.",
     "Jasność diod": "LED brightness",
     'Klawiatura z wyświetlaczem OLED 0.91" ({w}x{h})': 'Keypad with 0.91" OLED display ({w}x{h})',
-    'Wyłączone: znika sekcja wyświetlacza w zakładce "Przyciski",\n'
-    "a podgląd rysuje urządzenie bez ekranu.":
-        'Off: the display section in the "Buttons" tab is hidden\n'
-        "and the preview draws the device without a screen.",
+    "Włączone: wyświetlacz pokazuje nazwę aktywnego profilu.\n"
+    'Wyłączone: ekran urządzenia jest czyszczony, znika sekcja wyświetlacza\n'
+    'w zakładce "Przyciski", a podgląd rysuje urządzenie bez ekranu.':
+        "On: the display shows the active profile name.\n"
+        "Off: the device screen is cleared, the display section in the\n"
+        '"Buttons" tab is hidden and the preview draws the device without a screen.',
     "Ustawienie opisuje sprzęt, a nie profil - obowiązuje w całym programie "
     "i zapisuje się razem z konfiguracją.":
         "This setting describes the hardware, not a profile - it applies to the "
@@ -306,6 +338,19 @@ EN: dict[str, str] = {
         'shortcut starts "looping" the system.',
     "Włączony": "Enabled",
     "Plik konfiguracyjny": "Configuration file",
+    "Eksportuj...": "Export...",
+    "Importuj...": "Import...",
+    "Ustawienia fabryczne...": "Factory reset...",
+    "Eksport zapisuje kopię całej konfiguracji (ustawienia, profile, "
+    "przypisania przycisków i kolory) w wybranym pliku. Import i ustawienia "
+    "fabryczne zastępują bieżącą konfigurację - jej lokalizacja (poniżej) "
+    "się nie zmienia.":
+        "Export saves a copy of the whole configuration (settings, profiles, "
+        "button assignments and colors) to a file of your choice. Import and "
+        "factory reset replace the current configuration - its location (below) "
+        "stays the same.",
+    "Eksportuj konfigurację": "Export configuration",
+    "Importuj konfigurację": "Import configuration",
     "Zmień lokalizację...": "Change location...",
     "Wróć do domyślnej": "Restore default",
     "Otwórz folder": "Open folder",
@@ -317,38 +362,19 @@ EN: dict[str, str] = {
     "Plik JSON (*.json)": "JSON file (*.json)",
     "Nie udało się otworzyć folderu:\n{error}": "Could not open the folder:\n{error}",
 
-    # --- aktualizacje ---
-    "Aktualizacje": "Updates",
-    "kod z repozytorium git - aktualizacja przez git pull":
-        "source code from the git repository - updated with git pull",
-    "plik exe - aktualizacja z wydań (Releases) na GitHubie":
-        "exe file - updated from GitHub Releases",
-    "katalog programu nie jest repozytorium git - aktualizacja z poziomu "
-    "programu jest niedostępna":
-        "the program folder is not a git repository - updating from within "
-        "the program is unavailable",
-    "Wersja {version}, źródło: {source}": "Version {version}, source: {source}",
-    "Sprawdzaj aktualizacje przy starcie": "Check for updates on startup",
-    "Sprawdź teraz": "Check now",
-    "Aktualizuj": "Update",
-    "Otwórz repozytorium": "Open repository",
+    # --- aktualizacje (tylko pasek stanu) ---
     "Sprawdzanie aktualizacji...": "Checking for updates...",
     "Masz najnowszą wersję ({version}).": "You have the latest version ({version}).",
     "Dostępna aktualizacja: {latest} (masz {current}).":
         "Update available: {latest} (you have {current}).",
-    "Dostępna aktualizacja MAKKEY: {latest}. Zainstalujesz ją w Ustawieniach "
-    "-> Aktualizacje.":
-        "MAKKEY update available: {latest}. Install it in Settings -> Updates.",
     "Nie udało się sprawdzić aktualizacji: {error}": "Could not check for updates: {error}",
     "Aktualizowanie...": "Updating...",
     "Pobieranie: {done:.1f} / {total:.1f} MB": "Downloading: {done:.1f} / {total:.1f} MB",
     "Pobieranie: {done:.1f} MB": "Downloading: {done:.1f} MB",
     "Aktualizacja zainstalowana - zadziała po ponownym uruchomieniu programu.":
         "Update installed - it takes effect after restarting the program.",
-    "Aktualizacja zainstalowana. Uruchomić MAKKEY ponownie teraz?":
-        "Update installed. Restart MAKKEY now?",
     "Aktualizacja nie powiodła się: {error}": "Update failed: {error}",
-    "Nie udało się uruchomić programu ponownie:\n{error}": "Could not restart the program:\n{error}",
+    "Nie udało się uruchomić programu ponownie: {error}": "Could not restart the program: {error}",
     "git nie odpowiedział w ciągu {n} s": "git did not respond within {n} s",
     "nie udało się uruchomić gita: {error}": "could not run git: {error}",
     "bieżąca gałąź nie śledzi gałęzi w repozytorium (git branch -u origin/{branch})":

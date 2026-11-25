@@ -7,6 +7,8 @@ się tak samo w obu miejscach.
 
 Kolejność sekcji: Akcja -> Kolor diody LED -> Wyświetlacz OLED. Dwie ostatnie
 znikają, gdy w Ustawieniach zaznaczono wariant bez diod / bez wyświetlacza.
+Wyświetlacz pokazuje zawsze nazwę aktywnego profilu - sekcja OLED niczego
+nie edytuje, tylko pokazuje, co jest na ekranie.
 
 Listy rozwijane trzymają zapisywaną wartość (polski identyfikator z
 constants.py) w itemData, a pokazują jej tłumaczenie - dlatego czytamy
@@ -26,8 +28,9 @@ from ..constants import (
     ACTION_NONE, ACTION_SHORTCUT, ACTION_TEXT, ACTION_MEDIA, ACTION_PROFILE,
     ACTION_TYPES_STANDARD, LED_PRESET_COLORS, PROFILE_BUTTON_INDEX,
     MAX_MANUAL_PROFILES, OLED_MAX_CHARS, OLED_WIDTH_PX, OLED_HEIGHT_PX,
-    OLED_SOURCES, OLED_SOURCE_CUSTOM, MEDIA_ACTIONS,
+    MEDIA_ACTIONS,
 )
+from ..device.hid_link import to_oled_ascii
 from ..i18n import tr
 from ..models import AppModel
 from .common import Card, HotkeyEdit, combo, hint, label_row
@@ -126,12 +129,11 @@ class TabKeys(QWidget):
 
     colorChanged = Signal(int, str)          # (nr przycisku, #RRGGBB)
     mappingChanged = Signal(int)             # nr przycisku
+    commentChanged = Signal(int)             # nr przycisku (notatka użytkownika)
     buttonSelected = Signal(int)             # zmiana wyboru na macropadzie
     buttonEnabledChanged = Signal(int, bool) # predefiniowanie wł/wył
     manualSwitchingChanged = Signal(bool)
-    oledTextChanged = Signal(str)
-    oledSourceChanged = Signal(str)
-    oledTestRequested = Signal(str)
+    oledTestRequested = Signal()             # ponowna wysyłka nazwy profilu
 
     def __init__(self, model: AppModel, parent=None):
         super().__init__(parent)
@@ -164,6 +166,7 @@ class TabKeys(QWidget):
         card = Card(tr("Przyciski"))
         self.macropad = MacropadWidget(compact=True)
         self.macropad.setFixedHeight(232)
+        self.macropad.set_tooltip_provider(self.model.button_tooltip)
         self.macropad.buttonSelected.connect(self._on_macropad_clicked)
         card.add(self.macropad)
         card.add(hint(tr("Kliknij klawisz, żeby przypisać mu akcję i kolor. "
@@ -238,6 +241,22 @@ class TabKeys(QWidget):
         self.media_combo.hide()
         value_layout.addWidget(self.media_combo, 1)
         card.add(self.value_row)
+
+        # --- komentarz: notatka użytkownika, osobna w każdym profilu ---
+        # Zostaje edytowalny także przy wyłączonym predefiniowaniu - to opis,
+        # a nie część akcji.
+        self.comment_edit = QLineEdit()
+        self.comment_edit.setPlaceholderText(tr(
+            "Do czego służy ten skrót w tym programie..."
+        ))
+        self.comment_edit.setToolTip(tr(
+            "Twoja notatka do tego przycisku. Zapisywana osobno w każdym\n"
+            "profilu, pokazywana w podglądzie i w dymku nad klawiszem.\n"
+            "Nie jest wysyłana do urządzenia."
+        ))
+        self.comment_edit.setClearButtonEnabled(True)
+        self.comment_edit.textChanged.connect(self._on_comment_changed)
+        card.add_layout(label_row(tr("Komentarz"), self.comment_edit))
 
         # --- tryb profili + cykl ręczny (tylko przycisk 13) ---
         self.mode_container = QWidget()
@@ -321,28 +340,23 @@ class TabKeys(QWidget):
         self.oled_card = Card(tr('Wyświetlacz OLED 0.91" ({w}x{h})',
                                  w=OLED_WIDTH_PX, h=OLED_HEIGHT_PX))
 
-        self.oled_source = combo(20)
-        _fill(self.oled_source, OLED_SOURCES)
-        self.oled_source.currentIndexChanged.connect(self._on_oled_source_changed)
-        self.oled_card.add_layout(label_row(tr("Pokazuj"), self.oled_source))
-
-        self.oled_edit = QLineEdit()
-        self.oled_edit.setMaxLength(OLED_MAX_CHARS)
-        self.oled_edit.setPlaceholderText(tr("maksymalnie {n} znaków", n=OLED_MAX_CHARS))
-        self.oled_edit.textEdited.connect(self._on_oled_text_edited)
+        # Tylko do odczytu: tekst bierze się z nazwy profilu (panel po lewej).
+        self.oled_view = QLineEdit()
+        self.oled_view.setReadOnly(True)
+        self.oled_view.setObjectName("Mono")
         self.oled_send = QPushButton(tr("Wyślij na OLED"))
         self.oled_send.setObjectName("Primary")
-        self.oled_send.clicked.connect(
-            lambda: self.oledTestRequested.emit(self.oled_edit.text())
-        )
-        text_row = label_row(tr("Tekst"), self.oled_edit)
+        self.oled_send.clicked.connect(lambda: self.oledTestRequested.emit())
+        text_row = label_row(tr("Na ekranie"), self.oled_view)
         text_row.addWidget(self.oled_send)
         self.oled_card.add_layout(text_row)
 
         self.oled_card.add(hint(tr(
-            "Tekst należy do aktywnego profilu. Kontroler SSD1306 nie ma polskich "
-            "znaków w standardowym foncie - ogonki zostaną zamienione na "
-            "odpowiedniki bez znaków diakrytycznych (ą→a, ł→l)."
+            "Wyświetlacz pokazuje nazwę aktywnego profilu fontem 11x18 - mieści "
+            "się {n} znaków, dłuższa nazwa zostanie ucięta. Standardowy font "
+            "SSD1306 nie ma polskich znaków - ogonki zostaną zamienione na "
+            "odpowiedniki bez znaków diakrytycznych (ą→a, ł→l).",
+            n=OLED_MAX_CHARS,
         )))
         return self.oled_card
 
@@ -389,6 +403,7 @@ class TabKeys(QWidget):
 
         self.swatch.set_color(mapping.color)
         self.hex_edit.setText(mapping.color.upper())
+        self.comment_edit.setText(mapping.comment)
 
         self._loading = False
         self._sync_value_widgets()
@@ -397,19 +412,10 @@ class TabKeys(QWidget):
 
     def refresh_profile(self):
         """Przeładowuje wszystko, co należy do profilu (po jego zmianie)."""
-        self._loading = True
-        self.oled_edit.setText(self.model.current_profile.oled_text)
-        self._loading = False
         self.macropad.set_colors(self.model.colors())
         self.macropad.set_enabled_flags(self.model.enabled_flags())
-        self.macropad.set_oled_text(self.model.current_profile.oled_text)
+        self.set_oled_preview(self.model.current_profile.name)
         self.load_button(self.model.selected_button)
-
-    def set_oled_source(self, source: str):
-        self._loading = True
-        _select(self.oled_source, source)
-        self._loading = False
-        self._sync_oled_widgets()
 
     def refresh_cycle_list(self):
         """Odświeża listę profili biorących udział w ręcznym cyklu."""
@@ -441,6 +447,7 @@ class TabKeys(QWidget):
         self.macropad.set_color(index, color)
 
     def set_oled_preview(self, text: str):
+        self.oled_view.setText(to_oled_ascii(text))
         self.macropad.set_oled_text(text)
 
     # -------------------------------------------------------------- wewnątrz
@@ -481,12 +488,6 @@ class TabKeys(QWidget):
         self.mode_container.setEnabled(enabled)
         self.color_card.setEnabled(enabled)
 
-    def _sync_oled_widgets(self):
-        """Pole tekstu ma sens tylko przy własnym tekście profilu."""
-        custom = self.oled_source.currentData() == OLED_SOURCE_CUSTOM
-        self.oled_edit.setEnabled(custom)
-        self.oled_send.setEnabled(custom)
-
     # ------------------------------------------------------------- zdarzenia
     def _on_macropad_clicked(self, index: int):
         self.load_button(index)
@@ -525,6 +526,13 @@ class TabKeys(QWidget):
             mapping.value = self.hotkey_edit.text()
         self.mappingChanged.emit(self.model.selected_button)
 
+    def _on_comment_changed(self, text: str):
+        if self._loading:
+            return
+        index = self.model.selected_button
+        self.model.mapping(index).comment = text
+        self.commentChanged.emit(index)
+
     def _on_manual_toggled(self, enabled: bool):
         if self._loading:
             return
@@ -546,15 +554,3 @@ class TabKeys(QWidget):
         self.hex_edit.setText(color_hex.upper())
         self.macropad.set_color(index, color_hex)
         self.colorChanged.emit(index, color_hex)
-
-    def _on_oled_text_edited(self, text: str):
-        if self._loading:
-            return
-        self.model.current_profile.oled_text = text
-        self.macropad.set_oled_text(text)
-        self.oledTextChanged.emit(text)
-
-    def _on_oled_source_changed(self, _index: int):
-        self._sync_oled_widgets()
-        if not self._loading:
-            self.oledSourceChanged.emit(self.oled_source.currentData() or OLED_SOURCE_CUSTOM)

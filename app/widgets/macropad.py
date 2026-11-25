@@ -24,11 +24,13 @@ bez diod nie rysujemy poświaty, bez wyświetlacza nie rysujemy ekranu.
 """
 from __future__ import annotations
 
-from PySide6.QtCore import Qt, QRectF, QPointF, Signal
+from typing import Callable
+
+from PySide6.QtCore import Qt, QEvent, QRectF, QPointF, Signal
 from PySide6.QtGui import (
     QPainter, QColor, QFont, QPen, QLinearGradient, QRadialGradient
 )
-from PySide6.QtWidgets import QWidget, QSizePolicy
+from PySide6.QtWidgets import QWidget, QSizePolicy, QToolTip
 
 from .. import theme as T
 from ..i18n import tr
@@ -36,6 +38,7 @@ from ..constants import (
     GRID_COLUMNS, GRID_ROWS, PROFILE_BUTTON_INDEX,
     TOTAL_BUTTON_COUNT, DEFAULT_LED_COLOR,
 )
+from ..device.hid_link import to_oled_ascii
 
 # --- kolory obudowy (celowo takie same w obu motywach: to fizyczny
 #     przedmiot, a nie element interfejsu) ---
@@ -73,6 +76,9 @@ class MacropadWidget(QWidget):
         # False = MAKKEY wstrzymany przełącznikiem "Aktywny": urządzenie jest
         # rysowane wygaszone, bo program niczym nim nie steruje.
         self.device_active: bool = True
+        # Tekst dymka nad klawiszem (akcja + komentarz) - pytany dopiero przy
+        # najechaniu, więc zawsze pokazuje bieżący stan profilu.
+        self._tooltip_provider: Callable[[int], str] | None = None
 
         self._rects: dict[int, QRectF] = {}
         self._oled_rect = QRectF()
@@ -123,8 +129,14 @@ class MacropadWidget(QWidget):
             self.pressed.discard(index)
         self.update()
 
+    def set_tooltip_provider(self, provider: Callable[[int], str] | None):
+        """Funkcja nr klawisza -> tekst dymka (None = bez dymków)."""
+        self._tooltip_provider = provider
+
     def set_oled_text(self, text: str):
-        self.oled_text = text
+        # Ta sama transliteracja i to samo ucięcie co przy wysyłce - podgląd
+        # pokazuje dokładnie to, co narysuje firmware.
+        self.oled_text = to_oled_ascii(text)
         self.update()
 
     # -------------------------------------------------------------- geometria
@@ -422,3 +434,20 @@ class MacropadWidget(QWidget):
         if self.hovered is not None:
             self.hovered = None
             self.update()
+
+    def event(self, event) -> bool:
+        if event.type() == QEvent.ToolTip:
+            pos = QPointF(event.pos())
+            for index, rect in self._rects.items():
+                if rect.contains(pos):
+                    text = self._tooltip_provider(index) if self._tooltip_provider else ""
+                    if text:
+                        # Obszar = klawisz: dymek znika po zjechaniu z niego,
+                        # a nie dopiero po opuszczeniu całego widgetu.
+                        QToolTip.showText(event.globalPos(), text, self, rect.toRect())
+                        return True
+                    break
+            QToolTip.hideText()
+            event.ignore()
+            return True
+        return super().event(event)
